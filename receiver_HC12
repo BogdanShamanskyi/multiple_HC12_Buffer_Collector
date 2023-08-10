@@ -1,0 +1,72 @@
+#include <SoftwareSerial.h>
+
+#define RELAY 7
+#define TX 2
+#define RX 4
+#define _VCC 5
+
+SoftwareSerial HC12(TX, RX);
+
+uint32_t myTimer;
+int packageNumber = 0;
+String result;
+bool listener = true;
+
+void setup() {
+  pinMode(RELAY, OUTPUT);
+  digitalWrite(RELAY, HIGH);
+
+  pinMode(_VCC, OUTPUT);
+  digitalWrite(_VCC, HIGH);
+  
+  Serial.begin(9600);                       
+  HC12.begin(9600);
+}
+void loop() {
+  if (millis() - myTimer >= 1000) {
+    myTimer = millis();
+
+    while (HC12.available()) {
+      proccessRequest(byteToString(HC12.read()));
+    }
+
+    resetAll();
+  }
+}
+
+String byteToString(byte data) {
+  char value = (char) data;
+  
+  String charToString = (String) value;
+
+  return charToString;
+}
+
+void resetAll() {
+  result = "";
+  packageNumber = 0;
+}
+
+void proccessRequest(String data) {
+  if(packageNumber == result.length()) {
+    result = result + data;
+    packageNumber = ++packageNumber;
+  } else {
+      resetAll();
+      Serial.println("Package is lost!");
+  }
+
+  if(packageNumber == 6) {
+    if (result.substring(0, 1) == "C") {
+      Serial.print("Temperature into Collector: ");
+      Serial.println(result.substring(1, 6));
+    }
+
+    if (result.substring(0, 1) == "B") {
+      Serial.print("Temperature into Buffer: ");
+      Serial.println(result.substring(1, 6));
+    }
+    
+      
+  }
+}
