@@ -13,11 +13,13 @@ DallasTemperature sensors(&oneWire);
 
 SoftwareSerial HC12(TX, RX);
 
-boolean LEDflag = false;
-uint32_t myTimer;
+char data;
+String readBuffer = "";
+boolean readDataEnd = false;
 
 void setup() {
   pinMode(13, OUTPUT);
+  digitalWrite(13, LOW);
   
   pinMode(_VCC, OUTPUT);
   digitalWrite(_VCC, HIGH);
@@ -26,21 +28,40 @@ void setup() {
   Serial.begin(9600);   
                       
   HC12.begin(9600);   
+  HC12.listen();
 }
 void loop() {
-   String temperature;
+  while (HC12.available()) {
+    data = HC12.read();
 
-   if (millis() - myTimer >= 3000) {
-    myTimer = millis();
-    digitalWrite(13, LEDflag);
-    LEDflag = !LEDflag; 
-  
-    sensors.requestTemperatures();
-
-    temperature = String(sensors.getTempCByIndex(0), 2);
-
-    Serial.println(temperature);
-    HC12.print("B" + temperature);
+    readBuffer += char(data);
+    
+    if (data == '#') {
+      readDataEnd = true;
+    }
   }
+
+  delay(200);
+
+  if (readDataEnd) {
+    if (readBuffer.startsWith("C")) {
+      sendData();
+      delay(1500);
+    }
+
+    readDataEnd = false;
+  }
+
+  readBuffer = "";
+}
+
+void sendData() {
+  Serial.println("Send data!");
+  sensors.requestTemperatures(); 
   
+  float temp = sensors.getTempCByIndex(0);
+
+  if (temp > 0) {
+    HC12.print("B" + String(temp) + "#");
+  }
 }
