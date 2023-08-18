@@ -5,68 +5,85 @@
 #define RX 4
 #define _VCC 5
 
-SoftwareSerial HC12(TX, RX);
+SoftwareSerial hc12(TX, RX);
 
-uint32_t myTimer;
-int packageNumber = 0;
-String result;
-bool listener = true;
+char data;
+String readBuffer;
+boolean readDataEnd = false;
+
+float collectorTemperature = 0;
+float capacityTemperature = 0;
+
+float diferentTemps = 3;
 
 void setup() {
+  pinMode(_VCC, OUTPUT);
+  digitalWrite(_VCC, HIGH);
+
   pinMode(RELAY, OUTPUT);
   digitalWrite(RELAY, HIGH);
 
-  pinMode(_VCC, OUTPUT);
-  digitalWrite(_VCC, HIGH);
-  
-  Serial.begin(9600);                       
-  HC12.begin(9600);
+  Serial.begin(9600);
+  hc12.begin(9600);
 }
+
 void loop() {
-  if (millis() - myTimer >= 1000) {
-    myTimer = millis();
-
-    while (HC12.available()) {
-      proccessRequest(byteToString(HC12.read()));
-    }
-
-    resetAll();
-  }
-}
-
-String byteToString(byte data) {
-  char value = (char) data;
-  
-  String charToString = (String) value;
-
-  return charToString;
-}
-
-void resetAll() {
-  result = "";
-  packageNumber = 0;
-}
-
-void proccessRequest(String data) {
-  if(packageNumber == result.length()) {
-    result = result + data;
-    packageNumber = ++packageNumber;
-  } else {
-      resetAll();
-      Serial.println("Package is lost!");
+  if (!collectorTemperature) {
+    setTemperature(collectorTemperature, "B", "C");
   }
 
-  if(packageNumber == 6) {
-    if (result.substring(0, 1) == "C") {
-      Serial.print("Temperature into Collector: ");
-      Serial.println(result.substring(1, 6));
+  delay(100);
+
+  if (!capacityTemperature) {
+    setTemperature(capacityTemperature, "C", "B");
+  }
+
+  delay(100);
+
+  if (collectorTemperature && capacityTemperature) {
+    if (collectorTemperature > capacityTemperature + diferentTemps) {
+      relayOn();
+    } else {
+      relayOff();
     }
 
-    if (result.substring(0, 1) == "B") {
-      Serial.print("Temperature into Buffer: ");
-      Serial.println(result.substring(1, 6));
-    }
-    
-      
+    collectorTemperature = 0;
+    capacityTemperature = 0;
   }
+
+  delay(2000);
+}
+
+void setTemperature(float &temperature, String transmitter, String transmitterOff) {
+  hc12.print(transmitter + "#");
+
+  while (hc12.available()) {
+    data = hc12.read();
+
+    readBuffer += char(data);
+
+    if (data == '#') {
+      readDataEnd = true;
+    }
+  }
+
+  if (readDataEnd) {
+    if (readBuffer.startsWith(transmitterOff)) {
+      temperature = readBuffer.substring(2,7).toFloat();
+    } 
+
+    if (readBuffer.substring(1, 2) == transmitterOff) {
+      temperature = readBuffer.substring(2,7).toFloat();
+    } 
+  }
+
+  readBuffer = "";
+}
+
+void relayOn() {
+  digitalWrite(RELAY, LOW);
+}
+
+void relayOff() {
+  digitalWrite(RELAY, HIGH);
 }
